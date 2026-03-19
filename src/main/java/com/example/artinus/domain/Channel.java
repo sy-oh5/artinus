@@ -34,12 +34,4 @@ public class Channel {
         this.name = name;
         this.type = type;
     }
-
-    public boolean canSubscribe() {
-        return type.isCanSubscribe();
-    }
-
-    public boolean canUnsubscribe() {
-        return type.isCanUnsubscribe();
-    }
 }

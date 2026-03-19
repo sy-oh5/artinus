@@ -20,4 +20,16 @@ public class GlobalExceptionHandler {
                 .status(e.getExceptionType().getStatus().value())
                 .body(new ExceptionResponse(e.getExceptionType()));
     }
+
+    /*
+     * 그 외 모든 Exception
+     */
+    @ExceptionHandler(Exception.class)
+    protected ResponseEntity<ExceptionResponse> handleException(final Exception e) {
+        log.error("[GlobalExceptionHandler] handleException: {}", e.getMessage(), e);
+
+        return ResponseEntity
+                .status(ExceptionType.INTERNAL_SERVER_ERROR.getStatus().value())
+                .body(new ExceptionResponse(ExceptionType.INTERNAL_SERVER_ERROR));
+    }
 }

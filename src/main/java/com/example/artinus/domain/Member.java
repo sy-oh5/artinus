@@ -41,18 +41,24 @@ public class Member {
         this.subscriptionStatus = newStatus;
     }
 
-    public boolean canSubscribeTo(SubscriptionStatus targetStatus) {
+    public boolean isCanSubscribeTo(SubscriptionStatus targetStatus) {
         return switch (this.subscriptionStatus) {
+            // 구독 안함 -> 일반 구독, 프리미엄 구독 변경 가능
             case NONE -> targetStatus == SubscriptionStatus.STANDARD || targetStatus == SubscriptionStatus.PREMIUM;
+            // 일반 구독 -> 프리미엄 구독 변경 가능
             case STANDARD -> targetStatus == SubscriptionStatus.PREMIUM;
+            // 프리미엄 구독은 구독 상태 변경 불가
             case PREMIUM -> false;
         };
     }
 
-    public boolean canUnsubscribeTo(SubscriptionStatus targetStatus) {
+    public boolean isCanUnsubscribeTo(SubscriptionStatus targetStatus) {
         return switch (this.subscriptionStatus) {
+            // 프리미엄 구독 -> 일반 구독, 구독 안함으로 변경 가능
             case PREMIUM -> targetStatus == SubscriptionStatus.STANDARD || targetStatus == SubscriptionStatus.NONE;
+            // 일반 구독 -> 구독 안함으로 변경 가능
             case STANDARD -> targetStatus == SubscriptionStatus.NONE;
+            // 구독 안함은 구독 상태 변경 불가
             case NONE -> false;
         };
     }

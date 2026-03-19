@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Getter
@@ -41,6 +42,6 @@ public class SubscriptionHistoryResponseDto {
         private String newStatus;
 
         @Schema(description = "SubscriptionHistory.createdAt - 액션 일시", example = "2026-01-01 10:00:00")
-        private String actionDate;
+        private LocalDateTime actionDate;
     }
 }

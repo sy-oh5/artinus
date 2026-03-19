@@ -13,7 +13,6 @@ public enum ExceptionType {
      */
     INVALID_SUBSCRIPTION_STATUS(HttpStatus.BAD_REQUEST, "해당 구독 상태로 변경할 수 없습니다."),
     INVALID_UNSUBSCRIPTION_STATUS(HttpStatus.BAD_REQUEST, "해당 구독 상태로 해지할 수 없습니다."),
-    CANNOT_SUBSCRIBE_TO_NONE(HttpStatus.BAD_REQUEST, "구독 안함 상태로는 구독할 수 없습니다."),
 
     /*
      * 403 FORBIDDEN: 권한 없음
