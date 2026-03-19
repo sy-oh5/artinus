@@ -9,8 +9,9 @@ import com.example.artinus.dto.request.SubscribeRequestDto;
 import com.example.artinus.dto.request.UnsubscribeRequestDto;
 import com.example.artinus.dto.response.SubscriptionHistoryResponseDto;
 import com.example.artinus.dto.response.SubscriptionResponseDto;
-import com.example.artinus.exception.SubscriptionException;
-import com.example.artinus.external.CsrngClient;
+import com.example.artinus.exception.CustomException;
+import com.example.artinus.exception.ExceptionType;
+import com.example.artinus.external.CsrngFeignClient;
 import com.example.artinus.repository.ChannelRepository;
 import com.example.artinus.repository.MemberRepository;
 import com.example.artinus.repository.SubscriptionHistoryRepository;
@@ -28,17 +29,17 @@ public class SubscriptionService {
     private final MemberRepository memberRepository;
     private final ChannelRepository channelRepository;
     private final SubscriptionHistoryRepository historyRepository;
-    private final CsrngClient csrngClient;
+    private final CsrngFeignClient csrngFeignClient;
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     @Transactional
     public SubscriptionResponseDto subscribe(SubscribeRequestDto request) {
         Channel channel = channelRepository.findById(request.getChannelId())
-            .orElseThrow(() -> new SubscriptionException("존재하지 않는 채널입니다."));
+            .orElseThrow(() -> new CustomException(ExceptionType.CHANNEL_NOT_FOUND));
 
         if (!channel.canSubscribe()) {
-            throw new SubscriptionException("해당 채널에서는 구독할 수 없습니다.");
+            throw new CustomException(ExceptionType.CHANNEL_SUBSCRIBE_NOT_ALLOWED);
         }
 
         Member member = memberRepository.findByPhoneNumber(request.getPhoneNumber())
@@ -47,9 +48,8 @@ public class SubscriptionService {
         SubscriptionStatus previousStatus;
 
         if (member == null) {
-            // 최초 회원은 어떤 상태로든 가입 가능
             if (request.getTargetStatus() == SubscriptionStatus.NONE) {
-                throw new SubscriptionException("구독 안함 상태로는 구독할 수 없습니다.");
+                throw new CustomException(ExceptionType.CANNOT_SUBSCRIBE_TO_NONE);
             }
             previousStatus = SubscriptionStatus.NONE;
             member = Member.builder()
@@ -59,24 +59,15 @@ public class SubscriptionService {
         } else {
             previousStatus = member.getSubscriptionStatus();
             if (!member.canSubscribeTo(request.getTargetStatus())) {
-                throw new SubscriptionException(
-                    String.format("%s 상태에서 %s 상태로 변경할 수 없습니다.",
-                        previousStatus.getDescription(),
-                        request.getTargetStatus().getDescription())
-                );
+                throw new CustomException(ExceptionType.INVALID_SUBSCRIPTION_STATUS);
             }
             member.changeSubscriptionStatus(request.getTargetStatus());
         }
 
-        // 외부 API 호출
-        boolean isSuccess = csrngClient.verifyTransaction();
-        if (!isSuccess) {
-            throw new SubscriptionException("외부 시스템 검증에 실패했습니다. 트랜잭션이 롤백됩니다.");
-        }
+        verifyExternalApi();
 
         memberRepository.save(member);
 
-        // 이력 저장
         SubscriptionHistory history = SubscriptionHistory.builder()
             .member(member)
             .channel(channel)
@@ -97,35 +88,26 @@ public class SubscriptionService {
     @Transactional
     public SubscriptionResponseDto unsubscribe(UnsubscribeRequestDto request) {
         Channel channel = channelRepository.findById(request.getChannelId())
-            .orElseThrow(() -> new SubscriptionException("존재하지 않는 채널입니다."));
+            .orElseThrow(() -> new CustomException(ExceptionType.CHANNEL_NOT_FOUND));
 
         if (!channel.canUnsubscribe()) {
-            throw new SubscriptionException("해당 채널에서는 해지할 수 없습니다.");
+            throw new CustomException(ExceptionType.CHANNEL_UNSUBSCRIBE_NOT_ALLOWED);
         }
 
         Member member = memberRepository.findByPhoneNumber(request.getPhoneNumber())
-            .orElseThrow(() -> new SubscriptionException("존재하지 않는 회원입니다."));
+            .orElseThrow(() -> new CustomException(ExceptionType.MEMBER_NOT_FOUND));
 
         SubscriptionStatus previousStatus = member.getSubscriptionStatus();
 
         if (!member.canUnsubscribeTo(request.getTargetStatus())) {
-            throw new SubscriptionException(
-                String.format("%s 상태에서 %s 상태로 해지할 수 없습니다.",
-                    previousStatus.getDescription(),
-                    request.getTargetStatus().getDescription())
-            );
+            throw new CustomException(ExceptionType.INVALID_UNSUBSCRIPTION_STATUS);
         }
 
-        // 외부 API 호출
-        boolean isSuccess = csrngClient.verifyTransaction();
-        if (!isSuccess) {
-            throw new SubscriptionException("외부 시스템 검증에 실패했습니다. 트랜잭션이 롤백됩니다.");
-        }
+        verifyExternalApi();
 
         member.changeSubscriptionStatus(request.getTargetStatus());
         memberRepository.save(member);
 
-        // 이력 저장
         SubscriptionHistory history = SubscriptionHistory.builder()
             .member(member)
             .channel(channel)
@@ -146,7 +128,7 @@ public class SubscriptionService {
     @Transactional(readOnly = true)
     public SubscriptionHistoryResponseDto getHistory(String phoneNumber) {
         Member member = memberRepository.findByPhoneNumber(phoneNumber)
-            .orElseThrow(() -> new SubscriptionException("존재하지 않는 회원입니다."));
+            .orElseThrow(() -> new CustomException(ExceptionType.MEMBER_NOT_FOUND));
 
         List<SubscriptionHistory> histories = historyRepository.findByMemberWithChannel(member);
 
@@ -167,6 +149,19 @@ public class SubscriptionService {
             .history(historyItems)
             .summary(summary)
             .build();
+    }
+
+    private void verifyExternalApi() {
+        List<CsrngFeignClient.CsrngResponse> responses = csrngFeignClient.getRandomNumber(0, 1);
+
+        if (responses == null || responses.isEmpty()) {
+            throw new CustomException(ExceptionType.EXTERNAL_API_FAILURE);
+        }
+
+        CsrngFeignClient.CsrngResponse response = responses.get(0);
+        if (!"success".equals(response.status()) || response.random() != 1) {
+            throw new CustomException(ExceptionType.EXTERNAL_API_FAILURE);
+        }
     }
 
     private String generateSummary(List<SubscriptionHistory> histories) {
