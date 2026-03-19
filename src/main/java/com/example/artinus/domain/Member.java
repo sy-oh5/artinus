@@ -9,6 +9,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Comment;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(name = "members")
 @Comment("회원")
@@ -21,6 +23,10 @@ public class Member {
     @Comment("회원 ID")
     private Long id;
 
+    @Column(nullable = false)
+    @Comment("회원명")
+    private String name;
+
     @Convert(converter = AesConverter.class)
     @Column(nullable = false, unique = true)
     @Comment("휴대폰번호 (암호화)")
@@ -31,10 +37,16 @@ public class Member {
     @Comment("구독 상태 (NONE, STANDARD, PREMIUM)")
     private SubscriptionStatus subscriptionStatus;
 
+    @Column(nullable = false, updatable = false)
+    @Comment("생성일시")
+    private LocalDateTime createdAt;
+
     @Builder
-    public Member(String phoneNumber, SubscriptionStatus subscriptionStatus) {
+    public Member(String name, String phoneNumber, SubscriptionStatus subscriptionStatus) {
+        this.name = name;
         this.phoneNumber = phoneNumber;
         this.subscriptionStatus = subscriptionStatus;
+        this.createdAt = LocalDateTime.now();
     }
 
     public void changeSubscriptionStatus(SubscriptionStatus newStatus) {

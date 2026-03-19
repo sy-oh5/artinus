@@ -6,8 +6,10 @@ CREATE TABLE channels (
 
 CREATE TABLE members (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(50) NOT NULL DEFAULT '',
     phone_number VARCHAR(255) NOT NULL UNIQUE,
-    subscription_status VARCHAR(20) NOT NULL
+    subscription_status VARCHAR(20) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE subscription_history (
@@ -15,7 +17,7 @@ CREATE TABLE subscription_history (
     member_id BIGINT NOT NULL,
     channel_id BIGINT NOT NULL,
     action_type VARCHAR(20) NOT NULL,
-    previous_status VARCHAR(20) NOT NULL,
+    previous_status VARCHAR(20) NULL,
     new_status VARCHAR(20) NOT NULL,
     created_at DATETIME NOT NULL,
     FOREIGN KEY (member_id) REFERENCES members(id),

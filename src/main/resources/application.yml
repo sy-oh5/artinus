@@ -19,6 +19,8 @@ spring:
 external:
   csrng:
     url: https://csrng.net
+  gemini:
+    api-key: ${GEMINI_API_KEY}
 
 encryption:
   secret-key: ${ENCRYPTION_KEY}

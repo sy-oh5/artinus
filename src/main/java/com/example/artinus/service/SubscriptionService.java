@@ -16,20 +16,23 @@ import com.example.artinus.repository.ChannelRepository;
 import com.example.artinus.repository.MemberRepository;
 import com.example.artinus.repository.SubscriptionHistoryRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
-@Service
+@Slf4j
 @RequiredArgsConstructor
+@Service
 public class SubscriptionService {
 
     private final MemberRepository memberRepository;
     private final ChannelRepository channelRepository;
     private final SubscriptionHistoryRepository historyRepository;
     private final CsrngFeignClient csrngFeignClient;
+    private final LLMService llmService;
 
     @Transactional
     public SubscriptionResponseDto subscribe(SubscribeRequestDto request) {
@@ -50,9 +53,10 @@ public class SubscriptionService {
 
         // step 3: 회원 구독 상태 업데이트
         if (member == null) {
-            previousStatus = SubscriptionStatus.NONE;
+            previousStatus = null; // 신규 회원은 이전 상태 없음
             // 존재하지 않았던 회원이라면 생성
             member = Member.builder()
+                    .name(request.getName())
                     .phoneNumber(request.getPhoneNumber())
                     .subscriptionStatus(request.getTargetStatus())
                     .build();
@@ -82,7 +86,7 @@ public class SubscriptionService {
 
         return SubscriptionResponseDto.builder()
                 .phoneNumber(request.getPhoneNumber())
-                .previousStatus(previousStatus.getDescription())
+                .previousStatus(previousStatus != null ? previousStatus.getDescription() : null)
                 .newStatus(request.getTargetStatus().getDescription())
                 .message("구독이 완료되었습니다.")
                 .build();
@@ -144,7 +148,7 @@ public class SubscriptionService {
                 .map(h -> SubscriptionHistoryResponseDto.HistoryItemDto.builder()
                         .channelName(h.getChannel().getName())
                         .actionType(h.getActionType().getDescription())
-                        .previousStatus(h.getPreviousStatus().getDescription())
+                        .previousStatus(h.getPreviousStatus() != null ? h.getPreviousStatus().getDescription() : null)
                         .newStatus(h.getNewStatus().getDescription())
                         .actionDate(h.getCreatedAt())
                         .build())
@@ -173,21 +177,32 @@ public class SubscriptionService {
     }
 
     private String generateSummary(List<SubscriptionHistory> histories) {
-        // TODO: LLM API 연동 구현
         if (histories.isEmpty()) {
             return "구독 이력이 없습니다.";
         }
 
-        StringBuilder sb = new StringBuilder();
+        StringBuilder historyText = new StringBuilder();
         for (SubscriptionHistory h : histories) {
-            sb.append(String.format("%s %s을(를) 통해 %s에서 %s(으)로 %s하였습니다. ",
+            String previousStatusDesc = h.getPreviousStatus() != null
+                    ? h.getPreviousStatus().getDescription()
+                    : "없음";
+            historyText.append(String.format("- %s: %s에서 %s → %s (%s)\n",
                     h.getCreatedAt().format(DateTimeFormatter.ofPattern("yyyy년 M월 d일")),
                     h.getChannel().getName(),
-                    h.getPreviousStatus().getDescription(),
+                    previousStatusDesc,
                     h.getNewStatus().getDescription(),
                     h.getActionType().getDescription()
             ));
         }
-        return sb.toString().trim();
+
+        String prompt = String.format("""
+                다음은 회원의 구독 이력입니다. 이 이력을 자연스러운 한국어 문장으로 요약해주세요.
+                간결하게 2-3문장으로 작성해주세요.
+                
+                구독 이력:
+                %s
+                """, historyText);
+        log.info(prompt);
+        return llmService.generateSummary(prompt);
     }
 }

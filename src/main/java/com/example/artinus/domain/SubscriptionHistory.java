@@ -39,8 +39,8 @@ public class SubscriptionHistory {
     private ActionType actionType;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    @Comment("이전 구독 상태")
+    @Column
+    @Comment("이전 구독 상태 (신규 회원인 경우 null)")
     private SubscriptionStatus previousStatus;
 
     @Enumerated(EnumType.STRING)
