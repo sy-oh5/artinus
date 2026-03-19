@@ -1,0 +1,28 @@
+spring:
+  application:
+    name: artinus
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/artinus?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: root
+    password: ${DB_PASSWORD}
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+external:
+  csrng:
+    url: https://csrng.net
+
+encryption:
+  secret-key: ${ENCRYPTION_KEY}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
