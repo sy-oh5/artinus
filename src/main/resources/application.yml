@@ -3,9 +3,9 @@ spring:
     name: artinus
 
   datasource:
-    url: jdbc:mysql://localhost:3306/artinus?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
+    url: ${DB_HOST}
     driver-class-name: com.mysql.cj.jdbc.Driver
-    username: root
+    username: ${DB_USER_NAME}
     password: ${DB_PASSWORD}
 
   jpa:
