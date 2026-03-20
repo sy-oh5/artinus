@@ -246,6 +246,42 @@ GET /api/subscriptions/history?name={name}&phoneNumber={phoneNumber}
 }
 ```
 
+**LLM 요약 생성 코드**
+
+```java
+private String generateSummary(Member member, List<SubscriptionHistory> histories) {
+    if (histories.isEmpty()) {
+        return "구독 이력이 없습니다.";
+    }
+
+    StringBuilder historyText = new StringBuilder();
+
+    // prompt를 위해 구독 이력 문자열로 변환
+    for (SubscriptionHistory h : histories) {
+        String previousStatusDesc = h.getPreviousStatus() != null
+                ? h.getPreviousStatus().getDescription()
+                : "없음";
+        historyText.append(String.format("- %s: %s에서 %s → %s (%s)\n",
+                h.getCreatedAt().format(DateTimeFormatter.ofPattern("yyyy년 M월 d일")),
+                h.getChannel().getName(),
+                previousStatusDesc,
+                h.getNewStatus().getDescription(),
+                h.getActionType().getDescription()
+        ));
+    }
+
+    String prompt = String.format("""
+            다음은 %s 회원의 구독 이력입니다. 이 이력을 자연스러운 한국어 문장으로 요약해주세요.
+            간결하게 2-3문장으로 작성해주세요.
+
+            구독 이력:
+            %s
+            """, member.getName(), historyText);
+
+    return llmService.generatePrompt(prompt);
+}
+```
+
 ---
 
 ## 외부 API 장애 대응
@@ -255,13 +291,37 @@ GET /api/subscriptions/history?name={name}&phoneNumber={phoneNumber}
 CSRNG 외부 API 호출 시 **Spring Retry**를 적용하여 장애에 대응합니다.
 
 ```java
-
 @Retryable(
         retryFor = {Exception.class},
         maxAttempts = 3,
         backoff = @Backoff(delay = 1000, multiplier = 2)
 )
-public void verifyExternalApi() { ...}
+public void verifyExternalApi() {
+    RetryContext context = RetrySynchronizationManager.getContext();
+    int attempt = (context != null) ? context.getRetryCount() + 1 : 1;
+    log.info("외부 API 호출 시도 ({}/3)", attempt);
+
+    List<CsrngApiClient.CsrngResponse> responses = csrngApiClient.getRandomNumber(0, 1);
+
+    if (responses == null || responses.isEmpty()) {
+        log.warn("외부 API 검증 실패 - 응답 없음 ({}/3)", attempt);
+        throw new CustomException(ExceptionType.EXTERNAL_API_FAILURE);
+    }
+
+    CsrngApiClient.CsrngResponse response = responses.getFirst();
+    if (response.random() == 0) {
+        log.warn("외부 API 검증 실패 - random 값이 0 ({}/3)", attempt);
+        throw new CustomException(ExceptionType.EXTERNAL_API_FAILURE);
+    }
+
+    log.info("외부 API 검증 성공 ({}/3)", attempt);
+}
+
+@Recover
+public void recover(Exception e) {
+    log.error("외부 API 호출 3회 재시도 후 최종 실패: {}", e.getMessage());
+    throw new CustomException(ExceptionType.EXTERNAL_API_FAILURE);
+}
 ```
 
 | 설정          | 값      | 설명                    |
@@ -269,6 +329,25 @@ public void verifyExternalApi() { ...}
 | maxAttempts | 3      | 최대 3회 재시도             |
 | delay       | 1000ms | 초기 대기 시간              |
 | multiplier  | 2      | 지수 백오프 (1초 → 2초 → 4초) |
+
+---
+
+## 예외 처리
+
+- **ExceptionType** enum으로 예외 타입 및 HTTP 상태 코드 관리
+- **GlobalExceptionHandler**에서 `@RestControllerAdvice`로 전역 예외 처리
+
+**응답 예시**
+
+```json
+{
+  "timestamp": "2026-03-20T22:40:30.707139",
+  "status": 404,
+  "error": "NOT_FOUND",
+  "code": "MEMBER_NOT_FOUND",
+  "message": "존재하지 않는 회원입니다."
+}
+```
 
 ---
 
