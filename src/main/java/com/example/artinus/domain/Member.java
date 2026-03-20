@@ -4,7 +4,6 @@ import com.example.artinus.constant.SubscriptionStatus;
 import com.example.artinus.converter.AesConverter;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Comment;
@@ -41,12 +40,15 @@ public class Member {
     @Comment("생성일시")
     private LocalDateTime createdAt;
 
-    @Builder
-    public Member(String name, String phoneNumber, SubscriptionStatus subscriptionStatus) {
+    private Member(String name, String phoneNumber, SubscriptionStatus subscriptionStatus) {
         this.name = name;
         this.phoneNumber = phoneNumber;
         this.subscriptionStatus = subscriptionStatus;
         this.createdAt = LocalDateTime.now();
+    }
+
+    public static Member create(String name, String phoneNumber, SubscriptionStatus subscriptionStatus) {
+        return new Member(name, phoneNumber, subscriptionStatus);
     }
 
     public void changeSubscriptionStatus(SubscriptionStatus newStatus) {

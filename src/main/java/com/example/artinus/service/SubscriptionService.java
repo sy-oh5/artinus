@@ -13,6 +13,7 @@ import com.example.artinus.exception.CustomException;
 import com.example.artinus.exception.ExceptionType;
 import com.example.artinus.external.csrng.CsrngApiService;
 import com.example.artinus.external.llm.LLMService;
+import com.example.artinus.mapper.SubscriptionHistoryMapper;
 import com.example.artinus.repository.ChannelRepository;
 import com.example.artinus.repository.MemberRepository;
 import com.example.artinus.repository.SubscriptionHistoryQueryRepository;
@@ -35,6 +36,7 @@ public class SubscriptionService {
     private final ChannelRepository channelRepository;
     private final SubscriptionHistoryRepository historyRepository;
     private final SubscriptionHistoryQueryRepository historyQueryRepository;
+    private final SubscriptionHistoryMapper historyMapper;
     private final CsrngApiService csrngApiService;
     private final LLMService llmService;
 
@@ -57,15 +59,17 @@ public class SubscriptionService {
 
         // step 3: 회원 구독 상태 업데이트
         if (member == null) {
+            // 회원 생성일 경우 이름은 필수 값
             if (StringUtil.isBlank(request.getName())) {
                 throw new CustomException(ExceptionType.MEMBER_NAME_REQUIRED);
             }
+
             // 존재하지 않았던 회원이라면 생성
-            member = Member.builder()
-                    .name(request.getName())
-                    .phoneNumber(request.getPhoneNumber())
-                    .subscriptionStatus(request.getTargetStatus())
-                    .build();
+            member = Member.create(
+                    request.getName(),
+                    request.getPhoneNumber(),
+                    request.getTargetStatus()
+            );
         } else {
             previousStatus = member.getSubscriptionStatus();
             if (!member.isCanSubscribeTo(request.getTargetStatus())) {
@@ -81,14 +85,7 @@ public class SubscriptionService {
         memberRepository.save(member);
 
         // step 6: 이력 저장
-        SubscriptionHistory history = SubscriptionHistory.builder()
-                .member(member)
-                .channel(channel)
-                .actionType(ActionType.SUBSCRIBE)
-                .previousStatus(previousStatus)
-                .newStatus(request.getTargetStatus())
-                .build();
-        historyRepository.save(history);
+        saveHistory(member, channel, ActionType.SUBSCRIBE, previousStatus, request.getTargetStatus());
 
         return SubscriptionResponseDto.builder()
                 .phoneNumber(request.getPhoneNumber())
@@ -125,20 +122,19 @@ public class SubscriptionService {
         memberRepository.save(member);
 
         // step 5: 이력 저장
-        SubscriptionHistory history = SubscriptionHistory.builder()
-                .member(member)
-                .channel(channel)
-                .actionType(ActionType.UNSUBSCRIBE)
-                .previousStatus(previousStatus)
-                .newStatus(request.getTargetStatus())
-                .build();
-        historyRepository.save(history);
+        saveHistory(member, channel, ActionType.UNSUBSCRIBE, previousStatus, request.getTargetStatus());
 
         return SubscriptionResponseDto.builder()
                 .phoneNumber(request.getPhoneNumber())
                 .previousStatus(previousStatus)
                 .newStatus(request.getTargetStatus())
                 .build();
+    }
+
+    private void saveHistory(Member member, Channel channel, ActionType actionType,
+                             SubscriptionStatus previousStatus, SubscriptionStatus newStatus) {
+        SubscriptionHistory history = SubscriptionHistory.create(member, channel, actionType, previousStatus, newStatus);
+        historyRepository.save(history);
     }
 
     @Transactional(readOnly = true)
@@ -148,15 +144,7 @@ public class SubscriptionService {
 
         List<SubscriptionHistory> histories = historyQueryRepository.findByMemberWithChannel(member);
 
-        List<SubscriptionHistoryResponseDto.HistoryItemDto> historyItems = histories.stream()
-                .map(h -> SubscriptionHistoryResponseDto.HistoryItemDto.builder()
-                        .channelName(h.getChannel().getName())
-                        .actionType(h.getActionType())
-                        .previousStatus(h.getPreviousStatus())
-                        .newStatus(h.getNewStatus())
-                        .actionDate(h.getCreatedAt())
-                        .build())
-                .toList();
+        List<SubscriptionHistoryResponseDto.HistoryItemDto> historyItems = historyMapper.toHistoryItemDtoList(histories);
 
         String summary = generateSummary(member, histories);
 
@@ -175,6 +163,8 @@ public class SubscriptionService {
         }
 
         StringBuilder historyText = new StringBuilder();
+
+        // prompt를 위해 구독 이력 문자열로 변환
         for (SubscriptionHistory h : histories) {
             String previousStatusDesc = h.getPreviousStatus() != null
                     ? h.getPreviousStatus().getDescription()
@@ -191,7 +181,7 @@ public class SubscriptionService {
         String prompt = String.format("""
                 다음은 %s 회원의 구독 이력입니다. 이 이력을 자연스러운 한국어 문장으로 요약해주세요.
                 간결하게 2-3문장으로 작성해주세요.
-
+                
                 구독 이력:
                 %s
                 """, member.getName(), historyText);

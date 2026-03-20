@@ -4,7 +4,6 @@ import com.example.artinus.constant.ActionType;
 import com.example.artinus.constant.SubscriptionStatus;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Comment;
@@ -52,14 +51,18 @@ public class SubscriptionHistory {
     @Comment("생성일시")
     private LocalDateTime createdAt;
 
-    @Builder
-    public SubscriptionHistory(Member member, Channel channel, ActionType actionType,
-                               SubscriptionStatus previousStatus, SubscriptionStatus newStatus) {
+    private SubscriptionHistory(Member member, Channel channel, ActionType actionType,
+                                SubscriptionStatus previousStatus, SubscriptionStatus newStatus) {
         this.member = member;
         this.channel = channel;
         this.actionType = actionType;
         this.previousStatus = previousStatus;
         this.newStatus = newStatus;
         this.createdAt = LocalDateTime.now();
+    }
+
+    public static SubscriptionHistory create(Member member, Channel channel, ActionType actionType,
+                                             SubscriptionStatus previousStatus, SubscriptionStatus newStatus) {
+        return new SubscriptionHistory(member, channel, actionType, previousStatus, newStatus);
     }
 }
