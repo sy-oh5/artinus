@@ -11,7 +11,6 @@ public enum ExceptionType {
     /*
      * 400 BAD_REQUEST: 잘못된 요청
      */
-    MEMBER_NAME_REQUIRED(HttpStatus.BAD_REQUEST, "신규 회원은 이름이 필수입니다."),
     INVALID_SUBSCRIPTION_STATUS(HttpStatus.BAD_REQUEST, "해당 구독 상태로 변경할 수 없습니다."),
     INVALID_UNSUBSCRIPTION_STATUS(HttpStatus.BAD_REQUEST, "해당 구독 상태로 해지할 수 없습니다."),
 

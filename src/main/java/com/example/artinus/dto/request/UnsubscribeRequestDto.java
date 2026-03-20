@@ -14,6 +14,10 @@ import lombok.Setter;
 @Schema(description = "구독 해지 요청 DTO")
 public class UnsubscribeRequestDto {
 
+    @NotBlank(message = "이름은 필수입니다")
+    @Schema(description = "Member.name - 회원명", example = "홍길동")
+    private String name;
+
     @NotBlank(message = "휴대폰번호는 필수입니다")
     @Schema(description = "Member.phoneNumber - 회원 휴대폰번호", example = "01012345678")
     private String phoneNumber;

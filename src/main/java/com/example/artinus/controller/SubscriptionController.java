@@ -36,8 +36,10 @@ public class SubscriptionController {
 
     @GetMapping("/history")
     @Operation(summary = "구독 이력 조회")
-    public ResponseEntity<SubscriptionHistoryResponseDto> getHistory(@RequestParam String phoneNumber) {
-        SubscriptionHistoryResponseDto response = subscriptionService.getHistory(phoneNumber);
+    public ResponseEntity<SubscriptionHistoryResponseDto> getHistory(
+            @RequestParam String name,
+            @RequestParam String phoneNumber) {
+        SubscriptionHistoryResponseDto response = subscriptionService.getHistory(name, phoneNumber);
         return ResponseEntity.ok(response);
     }
 }

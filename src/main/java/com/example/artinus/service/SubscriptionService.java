@@ -18,7 +18,6 @@ import com.example.artinus.repository.ChannelRepository;
 import com.example.artinus.repository.MemberRepository;
 import com.example.artinus.repository.SubscriptionHistoryQueryRepository;
 import com.example.artinus.repository.SubscriptionHistoryRepository;
-import com.example.artinus.util.StringUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -59,11 +58,6 @@ public class SubscriptionService {
 
         // step 3: 회원 구독 상태 업데이트
         if (member == null) {
-            // 회원 생성일 경우 이름은 필수 값
-            if (StringUtil.isBlank(request.getName())) {
-                throw new CustomException(ExceptionType.MEMBER_NAME_REQUIRED);
-            }
-
             // 존재하지 않았던 회원이라면 생성
             member = Member.create(
                     request.getName(),
@@ -71,6 +65,11 @@ public class SubscriptionService {
                     request.getTargetStatus()
             );
         } else {
+            // 기존 회원인 경우 이름 검증 (보안상 동일한 에러 메시지)
+            if (!member.getName().equals(request.getName())) {
+                throw new CustomException(ExceptionType.MEMBER_NOT_FOUND);
+            }
+
             previousStatus = member.getSubscriptionStatus();
             if (!member.isCanSubscribeTo(request.getTargetStatus())) {
                 throw new CustomException(ExceptionType.INVALID_SUBSCRIPTION_STATUS);
@@ -104,8 +103,8 @@ public class SubscriptionService {
             throw new CustomException(ExceptionType.CHANNEL_UNSUBSCRIBE_NOT_ALLOWED);
         }
 
-        // step 2: 회원 조회
-        Member member = memberRepository.findByPhoneNumber(request.getPhoneNumber())
+        // step 2: 회원 조회 (이름 + 휴대폰번호로 검증)
+        Member member = memberRepository.findByNameAndPhoneNumber(request.getName(), request.getPhoneNumber())
                 .orElseThrow(() -> new CustomException(ExceptionType.MEMBER_NOT_FOUND));
 
         SubscriptionStatus previousStatus = member.getSubscriptionStatus();
@@ -138,8 +137,9 @@ public class SubscriptionService {
     }
 
     @Transactional(readOnly = true)
-    public SubscriptionHistoryResponseDto getHistory(String phoneNumber) {
-        Member member = memberRepository.findByPhoneNumber(phoneNumber)
+    public SubscriptionHistoryResponseDto getHistory(String name, String phoneNumber) {
+        // 이름 + 휴대폰번호로 검증
+        Member member = memberRepository.findByNameAndPhoneNumber(name, phoneNumber)
                 .orElseThrow(() -> new CustomException(ExceptionType.MEMBER_NOT_FOUND));
 
         List<SubscriptionHistory> histories = historyQueryRepository.findByMemberWithChannel(member);

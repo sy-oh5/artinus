@@ -14,7 +14,8 @@ import lombok.Setter;
 @Schema(description = "구독 요청 DTO")
 public class SubscribeRequestDto {
 
-    @Schema(description = "Member.name - 회원명 (신규 회원인 경우 필수)", example = "홍길동")
+    @NotBlank(message = "이름은 필수입니다")
+    @Schema(description = "Member.name - 회원명", example = "홍길동")
     private String name;
 
     @NotBlank(message = "휴대폰번호는 필수입니다")

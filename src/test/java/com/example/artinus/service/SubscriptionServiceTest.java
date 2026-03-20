@@ -109,6 +109,7 @@ class SubscriptionServiceTest {
             Member existingMember = Member.create("홍길동", "01012345678", SubscriptionStatus.STANDARD);
 
             SubscribeRequestDto request = new SubscribeRequestDto();
+            request.setName("홍길동");
             request.setPhoneNumber("01012345678");
             request.setChannelId(1L);
             request.setTargetStatus(SubscriptionStatus.PREMIUM);
@@ -168,24 +169,26 @@ class SubscriptionServiceTest {
         }
 
         @Test
-        @DisplayName("신규 회원인데 이름이 없으면 예외 발생")
-        void 신규_회원_이름_없음_예외() {
+        @DisplayName("기존 회원인데 이름이 불일치하면 예외 발생")
+        void 기존_회원_이름_불일치_예외() {
             // given
+            Member existingMember = Member.create("홍길동", "01012345678", SubscriptionStatus.STANDARD);
+
             SubscribeRequestDto request = new SubscribeRequestDto();
-            request.setName(null);
+            request.setName("김철수");
             request.setPhoneNumber("01012345678");
             request.setChannelId(1L);
-            request.setTargetStatus(SubscriptionStatus.STANDARD);
+            request.setTargetStatus(SubscriptionStatus.PREMIUM);
 
             when(channelRepository.findById(1L)).thenReturn(Optional.of(channel));
-            when(memberRepository.findByPhoneNumber("01012345678")).thenReturn(Optional.empty());
+            when(memberRepository.findByPhoneNumber("01012345678")).thenReturn(Optional.of(existingMember));
 
             // when & then
             assertThatThrownBy(() -> subscriptionService.subscribe(request))
                     .isInstanceOf(CustomException.class)
                     .satisfies(e -> {
                         CustomException ex = (CustomException) e;
-                        assertThat(ex.getExceptionType()).isEqualTo(ExceptionType.MEMBER_NAME_REQUIRED);
+                        assertThat(ex.getExceptionType()).isEqualTo(ExceptionType.MEMBER_NOT_FOUND);
                     });
         }
 
@@ -196,6 +199,7 @@ class SubscriptionServiceTest {
             Member premiumMember = Member.create("홍길동", "01012345678", SubscriptionStatus.PREMIUM);
 
             SubscribeRequestDto request = new SubscribeRequestDto();
+            request.setName("홍길동");
             request.setPhoneNumber("01012345678");
             request.setChannelId(1L);
             request.setTargetStatus(SubscriptionStatus.STANDARD);
@@ -250,12 +254,13 @@ class SubscriptionServiceTest {
             Member member = Member.create("홍길동", "01012345678", SubscriptionStatus.STANDARD);
 
             UnsubscribeRequestDto request = new UnsubscribeRequestDto();
+            request.setName("홍길동");
             request.setPhoneNumber("01012345678");
             request.setChannelId(1L);
             request.setTargetStatus(SubscriptionStatus.NONE);
 
             when(channelRepository.findById(1L)).thenReturn(Optional.of(channel));
-            when(memberRepository.findByPhoneNumber("01012345678")).thenReturn(Optional.of(member));
+            when(memberRepository.findByNameAndPhoneNumber("홍길동", "01012345678")).thenReturn(Optional.of(member));
             doNothing().when(csrngApiService).verifyExternalApi();
 
             // when
@@ -274,11 +279,12 @@ class SubscriptionServiceTest {
         void 회원_없음_예외() {
             // given
             UnsubscribeRequestDto request = new UnsubscribeRequestDto();
+            request.setName("홍길동");
             request.setPhoneNumber("01099999999");
             request.setChannelId(1L);
 
             when(channelRepository.findById(1L)).thenReturn(Optional.of(channel));
-            when(memberRepository.findByPhoneNumber("01099999999")).thenReturn(Optional.empty());
+            when(memberRepository.findByNameAndPhoneNumber("홍길동", "01099999999")).thenReturn(Optional.empty());
 
             // when & then
             assertThatThrownBy(() -> subscriptionService.unsubscribe(request))
@@ -320,12 +326,13 @@ class SubscriptionServiceTest {
             Member noneMember = Member.create("홍길동", "01012345678", SubscriptionStatus.NONE);
 
             UnsubscribeRequestDto request = new UnsubscribeRequestDto();
+            request.setName("홍길동");
             request.setPhoneNumber("01012345678");
             request.setChannelId(1L);
             request.setTargetStatus(SubscriptionStatus.STANDARD);
 
             when(channelRepository.findById(1L)).thenReturn(Optional.of(channel));
-            when(memberRepository.findByPhoneNumber("01012345678")).thenReturn(Optional.of(noneMember));
+            when(memberRepository.findByNameAndPhoneNumber("홍길동", "01012345678")).thenReturn(Optional.of(noneMember));
 
             // when & then
             assertThatThrownBy(() -> subscriptionService.unsubscribe(request))
