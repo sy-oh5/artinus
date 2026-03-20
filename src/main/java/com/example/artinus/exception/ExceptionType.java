@@ -11,6 +11,7 @@ public enum ExceptionType {
     /*
      * 400 BAD_REQUEST: 잘못된 요청
      */
+    MEMBER_NAME_REQUIRED(HttpStatus.BAD_REQUEST, "신규 회원은 이름이 필수입니다."),
     INVALID_SUBSCRIPTION_STATUS(HttpStatus.BAD_REQUEST, "해당 구독 상태로 변경할 수 없습니다."),
     INVALID_UNSUBSCRIPTION_STATUS(HttpStatus.BAD_REQUEST, "해당 구독 상태로 해지할 수 없습니다."),
 
@@ -32,9 +33,9 @@ public enum ExceptionType {
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "내부 서버 오류입니다."),
 
     /*
-     * 503 SERVICE_UNAVAILABLE: 서비스 이용 불가
+     * 502 BAD_GATEWAY: 외부 시스템 오류
      */
-    EXTERNAL_API_FAILURE(HttpStatus.SERVICE_UNAVAILABLE, "외부 시스템 검증에 실패했습니다. 잠시 후 다시 시도해주세요."),
+    EXTERNAL_API_FAILURE(HttpStatus.BAD_GATEWAY, "외부 시스템 검증에 실패했습니다. 잠시 후 다시 시도해주세요."),
     ;
 
     private final HttpStatus status;

@@ -1,4 +1,4 @@
-package com.example.artinus.service;
+package com.example.artinus.external.llm;
 
 import com.google.genai.Client;
 import com.google.genai.types.GenerateContentResponse;
@@ -14,7 +14,7 @@ public class GeminiLLMService implements LLMService {
     private final Client geminiClient;
 
     @Override
-    public String generateSummary(String prompt) {
+    public String generatePrompt(String prompt) {
         try {
             GenerateContentResponse response = geminiClient.models.generateContent(
                     "gemini-2.5-flash",

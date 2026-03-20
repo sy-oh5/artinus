@@ -11,10 +11,13 @@ import com.example.artinus.dto.response.SubscriptionHistoryResponseDto;
 import com.example.artinus.dto.response.SubscriptionResponseDto;
 import com.example.artinus.exception.CustomException;
 import com.example.artinus.exception.ExceptionType;
-import com.example.artinus.external.CsrngFeignClient;
+import com.example.artinus.external.csrng.CsrngApiService;
+import com.example.artinus.external.llm.LLMService;
 import com.example.artinus.repository.ChannelRepository;
 import com.example.artinus.repository.MemberRepository;
+import com.example.artinus.repository.SubscriptionHistoryQueryRepository;
 import com.example.artinus.repository.SubscriptionHistoryRepository;
+import com.example.artinus.util.StringUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,7 +34,8 @@ public class SubscriptionService {
     private final MemberRepository memberRepository;
     private final ChannelRepository channelRepository;
     private final SubscriptionHistoryRepository historyRepository;
-    private final CsrngFeignClient csrngFeignClient;
+    private final SubscriptionHistoryQueryRepository historyQueryRepository;
+    private final CsrngApiService csrngApiService;
     private final LLMService llmService;
 
     @Transactional
@@ -49,11 +53,13 @@ public class SubscriptionService {
         Member member = memberRepository.findByPhoneNumber(request.getPhoneNumber())
                 .orElse(null);
 
-        SubscriptionStatus previousStatus;
+        SubscriptionStatus previousStatus = null;
 
         // step 3: 회원 구독 상태 업데이트
         if (member == null) {
-            previousStatus = null; // 신규 회원은 이전 상태 없음
+            if (StringUtil.isBlank(request.getName())) {
+                throw new CustomException(ExceptionType.MEMBER_NAME_REQUIRED);
+            }
             // 존재하지 않았던 회원이라면 생성
             member = Member.builder()
                     .name(request.getName())
@@ -69,7 +75,7 @@ public class SubscriptionService {
         }
 
         // step 4: 외부 API 처리
-        verifyExternalApi();
+        csrngApiService.verifyExternalApi();
 
         // step 5: 회원 DB 저장
         memberRepository.save(member);
@@ -86,9 +92,8 @@ public class SubscriptionService {
 
         return SubscriptionResponseDto.builder()
                 .phoneNumber(request.getPhoneNumber())
-                .previousStatus(previousStatus != null ? previousStatus.getDescription() : null)
-                .newStatus(request.getTargetStatus().getDescription())
-                .message("구독이 완료되었습니다.")
+                .previousStatus(previousStatus)
+                .newStatus(request.getTargetStatus())
                 .build();
     }
 
@@ -113,7 +118,7 @@ public class SubscriptionService {
         }
 
         // step 3: 외부 API 검증
-        verifyExternalApi();
+        csrngApiService.verifyExternalApi();
 
         // step 4: 회원 DB 저장
         member.changeSubscriptionStatus(request.getTargetStatus());
@@ -131,9 +136,8 @@ public class SubscriptionService {
 
         return SubscriptionResponseDto.builder()
                 .phoneNumber(request.getPhoneNumber())
-                .previousStatus(previousStatus.getDescription())
-                .newStatus(request.getTargetStatus().getDescription())
-                .message("해지가 완료되었습니다.")
+                .previousStatus(previousStatus)
+                .newStatus(request.getTargetStatus())
                 .build();
     }
 
@@ -142,41 +146,30 @@ public class SubscriptionService {
         Member member = memberRepository.findByPhoneNumber(phoneNumber)
                 .orElseThrow(() -> new CustomException(ExceptionType.MEMBER_NOT_FOUND));
 
-        List<SubscriptionHistory> histories = historyRepository.findByMemberWithChannel(member);
+        List<SubscriptionHistory> histories = historyQueryRepository.findByMemberWithChannel(member);
 
         List<SubscriptionHistoryResponseDto.HistoryItemDto> historyItems = histories.stream()
                 .map(h -> SubscriptionHistoryResponseDto.HistoryItemDto.builder()
                         .channelName(h.getChannel().getName())
-                        .actionType(h.getActionType().getDescription())
-                        .previousStatus(h.getPreviousStatus() != null ? h.getPreviousStatus().getDescription() : null)
-                        .newStatus(h.getNewStatus().getDescription())
+                        .actionType(h.getActionType())
+                        .previousStatus(h.getPreviousStatus())
+                        .newStatus(h.getNewStatus())
                         .actionDate(h.getCreatedAt())
                         .build())
                 .toList();
 
-        // TODO: LLM API 연동하여 요약 생성
-        String summary = generateSummary(histories);
+        String summary = generateSummary(member, histories);
 
         return SubscriptionHistoryResponseDto.builder()
+                .memberName(member.getName())
+                .currentStatus(member.getSubscriptionStatus())
+                .memberCreatedAt(member.getCreatedAt())
                 .history(historyItems)
                 .summary(summary)
                 .build();
     }
 
-    private void verifyExternalApi() {
-        List<CsrngFeignClient.CsrngResponse> responses = csrngFeignClient.getRandomNumber(0, 1);
-
-        if (responses == null || responses.isEmpty()) {
-            throw new CustomException(ExceptionType.EXTERNAL_API_FAILURE);
-        }
-
-        CsrngFeignClient.CsrngResponse response = responses.getFirst();
-        if (response.random() == 0) {
-            throw new CustomException(ExceptionType.EXTERNAL_API_FAILURE);
-        }
-    }
-
-    private String generateSummary(List<SubscriptionHistory> histories) {
+    private String generateSummary(Member member, List<SubscriptionHistory> histories) {
         if (histories.isEmpty()) {
             return "구독 이력이 없습니다.";
         }
@@ -196,13 +189,13 @@ public class SubscriptionService {
         }
 
         String prompt = String.format("""
-                다음은 회원의 구독 이력입니다. 이 이력을 자연스러운 한국어 문장으로 요약해주세요.
+                다음은 %s 회원의 구독 이력입니다. 이 이력을 자연스러운 한국어 문장으로 요약해주세요.
                 간결하게 2-3문장으로 작성해주세요.
-                
+
                 구독 이력:
                 %s
-                """, historyText);
+                """, member.getName(), historyText);
         log.info(prompt);
-        return llmService.generateSummary(prompt);
+        return llmService.generatePrompt(prompt);
     }
 }
